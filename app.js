@@ -1,27 +1,27 @@
-// ===== Data Storage & State Management =====
+// ===== Data Storage & State Management (IndexedDB) =====
+const DB_NAME = 'MeowlsDB';
+const DB_VERSION = 1;
+const STORE_USERS = 'users';
+const STORE_LEARNINGS = 'learnings';
+const STORE_SETTINGS = 'settings'; // Problem statement, etc.
+
+// Session remains in LocalStorage for speed and persistence across tabs
 const STORAGE_KEYS = {
-    USERS: 'summerSchool_users_prod_v2',
-    SESSION: 'summerSchool_session_prod_v2',
-    LEARNINGS: 'summerSchool_learnings_prod_v2',
-    PROBLEM: 'summerSchool_problem_prod_v2',
-    LANG_PREF: 'summerSchool_lang_pref_prod_v2'
+    SESSION: 'meowls_session_v1',
+    LANG_PREF: 'meowls_lang_v1'
 };
 
-const MAX_USERS = 5;
+const MAX_USERS = 100; // Increased limit thanks to IndexedDB
 const TOTAL_DAYS = 15;
-
-// Program start date
 const PROGRAM_START_DATE = new Date();
 PROGRAM_START_DATE.setDate(PROGRAM_START_DATE.getDate() - 1);
 PROGRAM_START_DATE.setHours(0, 0, 0, 0);
 
 const DEFAULT_PROBLEM_TEXT = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.";
-
-// Helper to repeat text to match English length if translation is short
 const ENGLISH_WELCOME = "Welcome to Meowls, our intensive 15-day Summer School program focused on AI applications with eco-tech innovation. This program brings together passionate learners from around the world to explore cutting-edge artificial intelligence technologies while maintaining a sustainable, environmentally-conscious approach.";
 const ENGLISH_PROJECT = "Through hands-on projects, collaborative learning, and expert mentorship, participants will develop practical AI skills that address real-world environmental and technological challenges.";
 
-// ===== Translations =====
+// ===== Translations (Static) =====
 const TRANSLATIONS = {
     'Polish': {
         subtitle: "Program Innowacji Eko-Tech",
@@ -387,6 +387,7 @@ const COUNTRY_TO_LANG = {
     'Portugal': 'Portuguese'
 };
 
+// ... Utility Functions ...
 function hashPassword(p) { let h = 0; if (!p) return "0"; for (let i = 0; i < p.length; i++) { let c = p.charCodeAt(i); h = ((h << 5) - h) + c; h = h & h; } return h.toString(36); }
 function toProperCase(s) { if (!s) return ''; return s.replace(/\w\S*/g, (t) => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase()); }
 function getRandomBorderColor() { const c = ['hsl(150, 65%, 45%)', 'hsl(175, 70%, 40%)', 'hsl(200, 80%, 50%)', 'hsl(85, 75%, 55%)', 'hsl(185, 85%, 60%)', 'hsl(160, 70%, 50%)', 'hsl(190, 75%, 45%)']; return c[Math.floor(Math.random() * c.length)]; }
@@ -400,24 +401,110 @@ function getFlag(country) {
     return `<img src="${path}" alt="${country}" class="flag-icon" style="width: 24px; height: 18px; object-fit: cover; border-radius: 2px; display: inline-block; vertical-align: middle; margin-right: 5px;">`;
 }
 
-function getUsers() { try { const u = localStorage.getItem(STORAGE_KEYS.USERS); return u ? JSON.parse(u) : []; } catch (e) { return []; } }
-function saveUsers(u) { localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(u)); }
+function fileToBase64(file) { return new Promise((r, j) => { const d = new FileReader(); d.onload = () => r(d.result); d.onerror = j; d.readAsDataURL(file); }); }
+
+// ===== IndexedDB Implementation (The Core Fix) =====
+let dbPromise = null;
+
+function initDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_USERS)) {
+                db.createObjectStore(STORE_USERS, { keyPath: 'name' }); // Use username as key
+            }
+            if (!db.objectStoreNames.contains(STORE_LEARNINGS)) {
+                db.createObjectStore(STORE_LEARNINGS, { keyPath: 'id' }); // Simple key-value pair id: "day_username"
+            }
+            if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
+                db.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
+            }
+        };
+
+        request.onsuccess = (event) => {
+            console.log("DB Opened successfully");
+            resolve(event.target.result);
+        };
+        request.onerror = (event) => {
+            console.error("DB Error", event);
+            reject(event.target.error);
+        };
+    });
+    return dbPromise;
+}
+
+// Low-level DB Helpers
+async function dbGetAll(storeName) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function dbGet(storeName, key) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+async function dbPut(storeName, value) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.put(value);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Session Management (Still localStorage for immediate access)
 function getSession() { try { const s = localStorage.getItem(STORAGE_KEYS.SESSION); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function saveSession(u) { localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(u)); }
 function clearSession() { localStorage.removeItem(STORAGE_KEYS.SESSION); }
-function getLearnings() { try { const l = localStorage.getItem(STORAGE_KEYS.LEARNINGS); return l ? JSON.parse(l) : {}; } catch (e) { return {}; } }
-function saveLearnings(l) { localStorage.setItem(STORAGE_KEYS.LEARNINGS, JSON.stringify(l)); }
-function getLearningForDay(d, u) { const l = getLearnings(); return l[d]?.[u] || ''; }
-function saveLearningForDay(d, u, c) { const l = getLearnings(); if (!l[d]) l[d] = {}; l[d][u] = c; saveLearnings(l); }
-function getProblemStatement() { return localStorage.getItem(STORAGE_KEYS.PROBLEM) || DEFAULT_PROBLEM_TEXT; }
-function saveProblemStatement(t) { localStorage.setItem(STORAGE_KEYS.PROBLEM, t); }
-function fileToBase64(file) { return new Promise((r, j) => { const d = new FileReader(); d.onload = () => r(d.result); d.onerror = j; d.readAsDataURL(file); }); }
 
-// ===== Translations Logic =====
+// Data Access abstraction
+async function getUsers() { return await dbGetAll(STORE_USERS); }
+async function getLearnings() {
+    // Return map-like structure for compatibility
+    const all = await dbGetAll(STORE_LEARNINGS);
+    const map = {};
+    all.forEach(item => {
+        const [day, user] = item.id.split('__'); // Separator
+        if (!map[day]) map[day] = {};
+        map[day][user] = item.text;
+    });
+    return map;
+}
+async function saveLearningForDay(day, user, text) {
+    const id = `${day}__${user}`;
+    await dbPut(STORE_LEARNINGS, { id, day, user, text });
+}
+
+async function getProblemStatement() {
+    const res = await dbGet(STORE_SETTINGS, 'problem_statement');
+    return res ? res.value : DEFAULT_PROBLEM_TEXT;
+}
+
+async function saveProblemStatement(t) {
+    await dbPut(STORE_SETTINGS, { key: 'problem_statement', value: t });
+}
+
+
+// ===== Logic =====
 function applyTranslations(langName) {
     const dict = TRANSLATIONS[langName];
     if (!dict) return;
-
     const elements = document.querySelectorAll('[data-translate]');
     elements.forEach(el => {
         const key = el.getAttribute('data-translate');
@@ -434,7 +521,7 @@ function getTranslation(langName, key) {
     return key === 'problemStatementDefault' ? null : null;
 }
 
-// ===== Authentication Handlers (Restored) =====
+// ===== Async Auth Handlers =====
 async function handleSignup(e) {
     e.preventDefault();
     const name = toProperCase(document.getElementById('signupName').value.trim());
@@ -445,59 +532,51 @@ async function handleSignup(e) {
 
     if (!name || !password || !country || !stream || !photoFile) { alert('Please fill in all fields'); return; }
 
-    // Check File Size (Max 500KB) to prevent LocalStorage Quota Exceeded
-    if (photoFile.size > 500 * 1024) {
-        alert('Photo is too large! Please choose an image smaller than 500KB.');
-        return;
-    }
-
-    const users = getUsers();
-    if (users.length >= MAX_USERS) { alert('Registration full (Max 5 users)'); return; }
-    if (users.some(u => u.name === name)) { alert('Username already taken'); return; }
-
     try {
+        const users = await getUsers();
+        if (users.length >= MAX_USERS) { alert('Registration full (Max 100 users)'); return; }
+        if (users.some(u => u.name === name)) { alert('Username already taken'); return; }
+
         const photoBase64 = await fileToBase64(photoFile);
         const newUser = {
-            name,
+            name, // Key
             password: hashPassword(password),
             country,
             stream,
-            photo: photoBase64,
+            photo: photoBase64, // can now be large
             bio: ''
         };
-        users.push(newUser);
 
-        try {
-            saveUsers(users); // Try to save to disk
-        } catch (storageErr) {
-            console.error(storageErr);
-            alert('Storage Full! The photo could not be saved. Please use a smaller photo or clear users.');
-            return; // Stop here, do not log them in if save failed
-        }
-
+        await dbPut(STORE_USERS, newUser);
         saveSession(newUser);
+
         document.getElementById('signupForm').reset();
         document.getElementById('photoPreview').innerHTML = '';
-        showApp();
+        await showApp();
+
     } catch (err) {
-        console.error(err);
-        alert('Error processing signup. Please try again.');
+        console.error("Signup Failed", err);
+        alert('Error processing signup. ' + err.message);
     }
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
     e.preventDefault();
     const name = toProperCase(document.getElementById('loginName').value.trim());
     const password = document.getElementById('loginPassword').value;
-    const users = getUsers();
-    const user = users.find(u => u.name === name && u.password === hashPassword(password));
 
-    if (user) {
-        saveSession(user);
-        document.getElementById('loginForm').reset();
-        showApp();
-    } else {
-        alert('Invalid username or password');
+    try {
+        const user = await dbGet(STORE_USERS, name);
+        if (user && user.password === hashPassword(password)) {
+            saveSession(user);
+            document.getElementById('loginForm').reset();
+            await showApp();
+        } else {
+            alert('Invalid username or password');
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Login Error");
     }
 }
 
@@ -506,8 +585,8 @@ function handleLogout() {
     location.reload();
 }
 
-// ===== UI =====
-function showApp() {
+// ===== UI Renderer (Now Async) =====
+async function showApp() {
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('signupModal').classList.remove('active');
     document.getElementById('app').classList.remove('hidden');
@@ -521,22 +600,20 @@ function showApp() {
         if (!lang) {
             lang = COUNTRY_TO_LANG[user.country] || 'English';
         }
-
         const langSelect = document.getElementById('languageSelect');
         if (langSelect) {
             langSelect.value = lang;
         }
-
         applyTranslations(lang);
     }
 
-    renderTeamGrid();
-    renderTimeline();
-    renderProblemStatement();
+    await renderTeamGrid();
+    await renderTimeline();
+    await renderProblemStatement();
 }
 
-function renderTeamGrid() {
-    const users = getUsers();
+async function renderTeamGrid() {
+    const users = await getUsers();
     const teamGrid = document.getElementById('teamGrid');
     if (!teamGrid) return;
     teamGrid.innerHTML = '';
@@ -555,8 +632,8 @@ function renderTeamGrid() {
     });
 }
 
-function renderProblemStatement() {
-    const storedText = getProblemStatement();
+async function renderProblemStatement() {
+    const storedText = await getProblemStatement();
 
     const user = getSession();
     let lang = localStorage.getItem(STORAGE_KEYS.LANG_PREF);
@@ -581,7 +658,7 @@ function renderProblemStatement() {
     }
 }
 
-function toggleProblemEdit() {
+async function toggleProblemEdit() {
     const container = document.getElementById('problemTextContainer');
     const textarea = document.getElementById('problemTextarea');
     const isEditing = container.classList.contains('hidden');
@@ -592,12 +669,12 @@ function toggleProblemEdit() {
         textarea.value = container.innerText;
     } else {
         const newText = textarea.value.trim();
-        saveProblemStatement(newText);
-        renderProblemStatement();
+        await saveProblemStatement(newText);
+        await renderProblemStatement();
     }
 }
 
-function renderTimeline() {
+async function renderTimeline() {
     const timeline = document.getElementById('timeline');
     if (!timeline) return;
     timeline.innerHTML = '';
@@ -652,7 +729,7 @@ function renderTimeline() {
     }
 }
 
-function expandDay(dayIndex) {
+async function expandDay(dayIndex) {
     const modal = document.getElementById('dayExpandedModal');
     const title = document.getElementById('expandedDayTitle');
     const container = document.getElementById('expandedLearnings');
@@ -670,12 +747,17 @@ function expandDay(dayIndex) {
     if (title) title.textContent = `${label} - ${getDateForDay(dayIndex)}`;
     if (container) container.innerHTML = '';
 
-    const users = getUsers();
+    // Now wait for data
+    const users = await getUsers();
+    const allLearnings = await getLearnings();
+
+    const dayLearnings = allLearnings[dayIndex] || {};
+
     const currentUser = getSession();
 
     if (container) {
         users.forEach(u => {
-            const learning = getLearningForDay(dayIndex, u.name);
+            const learning = dayLearnings[u.name] || '';
             const borderColor = getRandomBorderColor();
             const card = document.createElement('div');
             card.className = 'learning-card';
@@ -714,7 +796,7 @@ function expandDay(dayIndex) {
     }
 }
 
-function toggleEdit(btn, dayIndex, username) {
+async function toggleEdit(btn, dayIndex, username) {
     const card = btn.closest('.learning-card');
     const textDiv = card.querySelector('.learning-text');
     const textarea = card.querySelector('.learning-textarea');
@@ -734,7 +816,7 @@ function toggleEdit(btn, dayIndex, username) {
         btn.classList.add('save-btn');
     } else {
         const content = textarea.value.trim();
-        saveLearningForDay(dayIndex, username, content);
+        await saveLearningForDay(dayIndex, username, content);
         textDiv.innerHTML = content || '...';
         textDiv.classList.remove('hidden');
         textarea.classList.add('hidden');
@@ -771,12 +853,18 @@ function loadTheme() {
     }, 0);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Global Event Listeners & Init (Async)
+document.addEventListener('DOMContentLoaded', async () => {
     try {
+        await initDB(); // Open Database First
+
         loadTheme();
         const session = getSession();
-        if (session) showApp();
-        else document.getElementById('loginModal').classList.add('active');
+        if (session) {
+            await showApp();
+        } else {
+            document.getElementById('loginModal').classList.add('active');
+        }
 
         // Delegated Event Listeners for UI Shell
         document.body.addEventListener('click', (e) => {
@@ -828,11 +916,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Use Delegation for Language Select Change
-        document.body.addEventListener('change', (e) => {
+        document.body.addEventListener('change', async (e) => {
             if (e.target.id === 'languageSelect') {
                 const newLang = e.target.value;
                 localStorage.setItem(STORAGE_KEYS.LANG_PREF, newLang);
-                showApp();
+                await showApp();
             }
         });
 
@@ -871,46 +959,53 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const user = getSession(); if (!user) return;
-            const users = getUsers(); const userIndex = users.findIndex(u => u.name === user.name);
             const country = document.getElementById('editCountry').value;
             const stream = document.getElementById('editStream').value.trim();
             const bio = document.getElementById('editBio').value.trim();
             const photoFile = document.getElementById('editPhoto').files[0];
-            if (userIndex > -1) {
-                users[userIndex].country = country;
-                users[userIndex].stream = stream;
-                users[userIndex].bio = bio;
-                if (photoFile) {
-                    const photoBase64 = await fileToBase64(photoFile);
-                    users[userIndex].photo = photoBase64;
+
+            try {
+                // Get fresh user object from DB
+                const dbUser = await dbGet(STORE_USERS, user.name);
+                if (dbUser) {
+                    dbUser.country = country;
+                    dbUser.stream = stream;
+                    dbUser.bio = bio;
+                    if (photoFile) {
+                        const photoBase64 = await fileToBase64(photoFile);
+                        dbUser.photo = photoBase64;
+                    }
+                    await dbPut(STORE_USERS, dbUser);
+                    saveSession(dbUser);
+                    document.getElementById('editProfileModal').classList.remove('active');
+                    location.reload();
                 }
-                saveUsers(users);
-                saveSession(users[userIndex]);
-                document.getElementById('editProfileModal').classList.remove('active');
-                location.reload();
-            }
+            } catch (err) { alert("Error updating profile"); }
         });
 
-        document.getElementById('changePasswordForm').addEventListener('submit', (e) => {
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             if (newPassword !== confirmPassword) { alert('New passwords do not match'); return; }
             const user = getSession();
-            const users = getUsers();
-            const userIndex = users.findIndex(u => u.name === user.name);
-            if (users[userIndex].password !== hashPassword(currentPassword)) { alert('Current password is incorrect'); return; }
-            users[userIndex].password = hashPassword(newPassword);
-            saveUsers(users);
-            saveSession(users[userIndex]);
-            alert('Password changed successfully');
-            document.getElementById('changePasswordModal').classList.remove('active');
+
+            try {
+                const dbUser = await dbGet(STORE_USERS, user.name);
+                if (dbUser.password !== hashPassword(currentPassword)) { alert('Current password is incorrect'); return; }
+                dbUser.password = hashPassword(newPassword);
+                await dbPut(STORE_USERS, dbUser);
+                saveSession(dbUser);
+                alert('Password changed successfully');
+                document.getElementById('changePasswordModal').classList.remove('active');
+            } catch (err) { alert("Error changing password"); }
         });
 
     } catch (err) { console.error("Init", err); }
 });
 
+// Exports for global button access
 window.expandDay = expandDay;
 window.toggleEdit = toggleEdit;
 window.toggleProblemEdit = toggleProblemEdit;
