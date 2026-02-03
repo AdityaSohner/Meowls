@@ -1,17 +1,28 @@
-// ===== Data Storage & State Management (IndexedDB) =====
-const DB_NAME = 'MeowlsDB';
-const DB_VERSION = 1;
-const STORE_USERS = 'users';
-const STORE_LEARNINGS = 'learnings';
-const STORE_SETTINGS = 'settings'; // Problem statement, etc.
-
-// Session remains in LocalStorage for speed and persistence across tabs
-const STORAGE_KEYS = {
-    SESSION: 'meowls_session_v1',
-    LANG_PREF: 'meowls_lang_v1'
+// ===== Firebase Configuration =====
+const firebaseConfig = {
+    apiKey: "AIzaSyC0c2h4rTtH4FIRzFZycBlWhokacny3TfA",
+    authDomain: "meowls-2026.firebaseapp.com",
+    projectId: "meowls-2026",
+    storageBucket: "meowls-2026.firebasestorage.app",
+    messagingSenderId: "370119706517",
+    appId: "1:370119706517:web:5614b8db6f81c4e22dd89c"
 };
 
-const MAX_USERS = 100; // Increased limit thanks to IndexedDB
+// Initialize Firebase (Compat)
+try {
+    firebase.initializeApp(firebaseConfig);
+    console.log("Firebase Initialized");
+} catch (e) {
+    console.error("Firebase Init Error:", e);
+}
+const db = firebase.firestore();
+
+// ===== Constants & State =====
+const STORAGE_KEYS = {
+    SESSION: 'meowls_session_fire', // Local session only
+    LANG_PREF: 'meowls_lang_fire'
+};
+
 const TOTAL_DAYS = 15;
 const PROGRAM_START_DATE = new Date();
 PROGRAM_START_DATE.setDate(PROGRAM_START_DATE.getDate() - 1);
@@ -21,7 +32,7 @@ const DEFAULT_PROBLEM_TEXT = "Lorem ipsum dolor sit amet, consectetur adipiscing
 const ENGLISH_WELCOME = "Welcome to Meowls, our intensive 15-day Summer School program focused on AI applications with eco-tech innovation. This program brings together passionate learners from around the world to explore cutting-edge artificial intelligence technologies while maintaining a sustainable, environmentally-conscious approach.";
 const ENGLISH_PROJECT = "Through hands-on projects, collaborative learning, and expert mentorship, participants will develop practical AI skills that address real-world environmental and technological challenges.";
 
-// ===== Translations (Static) =====
+// ===== Translations =====
 const TRANSLATIONS = {
     'Polish': {
         subtitle: "Program Innowacji Eko-Tech",
@@ -403,102 +414,10 @@ function getFlag(country) {
 
 function fileToBase64(file) { return new Promise((r, j) => { const d = new FileReader(); d.onload = () => r(d.result); d.onerror = j; d.readAsDataURL(file); }); }
 
-// ===== IndexedDB Implementation (The Core Fix) =====
-let dbPromise = null;
-
-function initDB() {
-    if (dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_USERS)) {
-                db.createObjectStore(STORE_USERS, { keyPath: 'name' }); // Use username as key
-            }
-            if (!db.objectStoreNames.contains(STORE_LEARNINGS)) {
-                db.createObjectStore(STORE_LEARNINGS, { keyPath: 'id' }); // Simple key-value pair id: "day_username"
-            }
-            if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
-                db.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
-            }
-        };
-
-        request.onsuccess = (event) => {
-            console.log("DB Opened successfully");
-            resolve(event.target.result);
-        };
-        request.onerror = (event) => {
-            console.error("DB Error", event);
-            reject(event.target.error);
-        };
-    });
-    return dbPromise;
-}
-
-// Low-level DB Helpers
-async function dbGetAll(storeName) {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-async function dbGet(storeName, key) {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const req = store.get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-async function dbPut(storeName, value) {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        const req = store.put(value);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-// Session Management (Still localStorage for immediate access)
+// Global Session (Local Storage)
 function getSession() { try { const s = localStorage.getItem(STORAGE_KEYS.SESSION); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function saveSession(u) { localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(u)); }
 function clearSession() { localStorage.removeItem(STORAGE_KEYS.SESSION); }
-
-// Data Access abstraction
-async function getUsers() { return await dbGetAll(STORE_USERS); }
-async function getLearnings() {
-    // Return map-like structure for compatibility
-    const all = await dbGetAll(STORE_LEARNINGS);
-    const map = {};
-    all.forEach(item => {
-        const [day, user] = item.id.split('__'); // Separator
-        if (!map[day]) map[day] = {};
-        map[day][user] = item.text;
-    });
-    return map;
-}
-async function saveLearningForDay(day, user, text) {
-    const id = `${day}__${user}`;
-    await dbPut(STORE_LEARNINGS, { id, day, user, text });
-}
-
-async function getProblemStatement() {
-    const res = await dbGet(STORE_SETTINGS, 'problem_statement');
-    return res ? res.value : DEFAULT_PROBLEM_TEXT;
-}
-
-async function saveProblemStatement(t) {
-    await dbPut(STORE_SETTINGS, { key: 'problem_statement', value: t });
-}
 
 
 // ===== Logic =====
@@ -521,7 +440,7 @@ function getTranslation(langName, key) {
     return key === 'problemStatementDefault' ? null : null;
 }
 
-// ===== Async Auth Handlers =====
+// ===== Async Auth Handlers (Firestore) =====
 async function handleSignup(e) {
     e.preventDefault();
     const name = toProperCase(document.getElementById('signupName').value.trim());
@@ -532,31 +451,38 @@ async function handleSignup(e) {
 
     if (!name || !password || !country || !stream || !photoFile) { alert('Please fill in all fields'); return; }
 
+    // Safety check for size, though Firestore allows 1MB, let's keep it reasonable
+    if (photoFile.size > 800 * 1024) { alert('Photo too large (max 800KB)'); return; }
+
     try {
-        const users = await getUsers();
-        if (users.length >= MAX_USERS) { alert('Registration full (Max 100 users)'); return; }
-        if (users.some(u => u.name === name)) { alert('Username already taken'); return; }
+        // Check if user exists
+        const userRef = db.collection('users').doc(name);
+        const docSnap = await userRef.get();
+        if (docSnap.exists) {
+            alert('Username already taken. Please choose another.');
+            return;
+        }
 
         const photoBase64 = await fileToBase64(photoFile);
         const newUser = {
-            name, // Key
+            name,
             password: hashPassword(password),
             country,
             stream,
-            photo: photoBase64, // can now be large
+            photo: photoBase64,
             bio: ''
         };
 
-        await dbPut(STORE_USERS, newUser);
-        saveSession(newUser);
+        await userRef.set(newUser); // Save to Cloud
 
+        saveSession(newUser);
         document.getElementById('signupForm').reset();
         document.getElementById('photoPreview').innerHTML = '';
         await showApp();
 
     } catch (err) {
         console.error("Signup Failed", err);
-        alert('Error processing signup. ' + err.message);
+        alert('Error processing signup: ' + err.message);
     }
 }
 
@@ -566,17 +492,22 @@ async function handleLogin(e) {
     const password = document.getElementById('loginPassword').value;
 
     try {
-        const user = await dbGet(STORE_USERS, name);
-        if (user && user.password === hashPassword(password)) {
-            saveSession(user);
-            document.getElementById('loginForm').reset();
-            await showApp();
-        } else {
-            alert('Invalid username or password');
+        const userRef = db.collection('users').doc(name);
+        const docSnap = await userRef.get();
+
+        if (docSnap.exists) {
+            const userData = docSnap.data();
+            if (userData.password === hashPassword(password)) {
+                saveSession(userData);
+                document.getElementById('loginForm').reset();
+                await showApp();
+                return;
+            }
         }
+        alert('Invalid username or password');
     } catch (err) {
-        console.error(err);
-        alert("Login Error");
+        console.error("Login Error", err);
+        alert("Login failed: " + err.message);
     }
 }
 
@@ -585,7 +516,7 @@ function handleLogout() {
     location.reload();
 }
 
-// ===== UI Renderer (Now Async) =====
+// ===== UI Renderer =====
 async function showApp() {
     document.getElementById('loginModal').classList.remove('active');
     document.getElementById('signupModal').classList.remove('active');
@@ -613,35 +544,48 @@ async function showApp() {
 }
 
 async function renderTeamGrid() {
-    const users = await getUsers();
     const teamGrid = document.getElementById('teamGrid');
     if (!teamGrid) return;
-    teamGrid.innerHTML = '';
-    users.forEach(user => {
-        const card = document.createElement('div');
-        card.className = 'team-card';
-        card.innerHTML = `
-            <div class="team-photo"><img src="${user.photo}" alt="${user.name}"></div>
-            <h3>${user.name}</h3>
-            <p class="country-flag" style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-                ${getFlag(user.country)} ${user.country}
-            </p>
-            <p class="bio">${user.bio || 'New member'}</p>
-        `;
-        teamGrid.appendChild(card);
-    });
+
+    // Fetch all users from Firestore
+    try {
+        const snapshot = await db.collection('users').get();
+        teamGrid.innerHTML = '';
+        snapshot.forEach(doc => {
+            const user = doc.data();
+            const card = document.createElement('div');
+            card.className = 'team-card';
+            card.innerHTML = `
+                <div class="team-photo"><img src="${user.photo}" alt="${user.name}"></div>
+                <h3>${user.name}</h3>
+                <p class="country-flag" style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                    ${getFlag(user.country)} ${user.country}
+                </p>
+                <p class="bio">${user.bio || 'New member'}</p>
+            `;
+            teamGrid.appendChild(card);
+        });
+    } catch (e) { console.error("Error loading team", e); }
 }
 
 async function renderProblemStatement() {
-    const storedText = await getProblemStatement();
+    let textToShow = DEFAULT_PROBLEM_TEXT;
+
+    try {
+        const docRef = db.collection('settings').doc('problem_statement');
+        const docSnap = await docRef.get();
+        if (docSnap.exists && docSnap.data().value) {
+            textToShow = docSnap.data().value;
+        }
+    } catch (e) {
+        // Fallback to default
+    }
 
     const user = getSession();
     let lang = localStorage.getItem(STORAGE_KEYS.LANG_PREF);
     if (!lang && user) lang = COUNTRY_TO_LANG[user.country] || 'English';
 
-    let textToShow = storedText;
-
-    if (storedText === DEFAULT_PROBLEM_TEXT) {
+    if (textToShow === DEFAULT_PROBLEM_TEXT) {
         const translatedDefault = getTranslation(lang, 'problemStatementDefault');
         if (translatedDefault) textToShow = translatedDefault;
     }
@@ -669,8 +613,11 @@ async function toggleProblemEdit() {
         textarea.value = container.innerText;
     } else {
         const newText = textarea.value.trim();
-        await saveProblemStatement(newText);
-        await renderProblemStatement();
+        // Save to Firestore
+        try {
+            await db.collection('settings').doc('problem_statement').set({ value: newText });
+            await renderProblemStatement();
+        } catch (e) { alert('Error saving problem statement'); }
     }
 }
 
@@ -689,6 +636,7 @@ async function renderTimeline() {
         const item = document.createElement('div');
         item.className = 'timeline-item';
 
+        // ... (standard timeline rendering logic) ...
         const content = document.createElement('div');
         content.className = 'timeline-content';
 
@@ -729,6 +677,10 @@ async function renderTimeline() {
     }
 }
 
+// Global variable to cache learnings to avoid too many reads? 
+// For simplicity, we just fetch when needed or assume lightweight.
+// Let's implement fetch on expand.
+
 async function expandDay(dayIndex) {
     const modal = document.getElementById('dayExpandedModal');
     const title = document.getElementById('expandedDayTitle');
@@ -745,19 +697,31 @@ async function expandDay(dayIndex) {
     if (lang === 'Chinese') label = `第 ${dayIndex} 天`;
 
     if (title) title.textContent = `${label} - ${getDateForDay(dayIndex)}`;
-    if (container) container.innerHTML = '';
+    if (container) container.innerHTML = 'Loading...';
+    if (modal) modal.classList.add('active'); // Show immediately
 
-    // Now wait for data
-    const users = await getUsers();
-    const allLearnings = await getLearnings();
+    try {
+        // Fetch all users
+        const usersSnap = await db.collection('users').get();
+        const users = [];
+        usersSnap.forEach(d => users.push(d.data()));
 
-    const dayLearnings = allLearnings[dayIndex] || {};
+        // Fetch learnings for this day
+        // Structure: collection('learnings').doc(id is random?). 
+        // Better: collection('learnings').where('day', '==', dayIndex).get()
+        const learningsSnap = await db.collection('learnings').where('day', '==', dayIndex).get();
+        const learningMap = {};
+        learningsSnap.forEach(d => {
+            const data = d.data();
+            learningMap[data.user] = data.text;
+        });
 
-    const currentUser = getSession();
+        if (container) container.innerHTML = '';
 
-    if (container) {
+        const currentUser = getSession();
+
         users.forEach(u => {
-            const learning = dayLearnings[u.name] || '';
+            const learning = learningMap[u.name] || '';
             const borderColor = getRandomBorderColor();
             const card = document.createElement('div');
             card.className = 'learning-card';
@@ -792,7 +756,9 @@ async function expandDay(dayIndex) {
             `;
             container.appendChild(card);
         });
-        if (modal) modal.classList.add('active');
+    } catch (e) {
+        console.error(e);
+        if (container) container.innerHTML = 'Error loading data.';
     }
 }
 
@@ -816,13 +782,22 @@ async function toggleEdit(btn, dayIndex, username) {
         btn.classList.add('save-btn');
     } else {
         const content = textarea.value.trim();
-        await saveLearningForDay(dayIndex, username, content);
-        textDiv.innerHTML = content || '...';
-        textDiv.classList.remove('hidden');
-        textarea.classList.add('hidden');
-        btn.textContent = editText;
-        btn.classList.remove('save-btn');
-        btn.classList.add('edit-btn');
+        // Save to Firestore
+        // ID: day_username to be unique
+        const docId = `${dayIndex}_${username}`;
+        try {
+            await db.collection('learnings').doc(docId).set({
+                day: dayIndex,
+                user: username,
+                text: content
+            });
+            textDiv.innerHTML = content || '...';
+            textDiv.classList.remove('hidden');
+            textarea.classList.add('hidden');
+            btn.textContent = editText;
+            btn.classList.remove('save-btn');
+            btn.classList.add('edit-btn');
+        } catch (e) { alert("Error saving learning"); }
     }
 }
 
@@ -856,8 +831,6 @@ function loadTheme() {
 // Global Event Listeners & Init (Async)
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        await initDB(); // Open Database First
-
         loadTheme();
         const session = getSession();
         if (session) {
@@ -965,18 +938,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             const photoFile = document.getElementById('editPhoto').files[0];
 
             try {
-                // Get fresh user object from DB
-                const dbUser = await dbGet(STORE_USERS, user.name);
-                if (dbUser) {
-                    dbUser.country = country;
-                    dbUser.stream = stream;
-                    dbUser.bio = bio;
+                // Fetch fresh
+                const userRef = db.collection('users').doc(user.name);
+                const docSnap = await userRef.get();
+                if (docSnap.exists) {
+                    const dbUser = docSnap.data();
+                    const updates = { country, stream, bio };
+
                     if (photoFile) {
                         const photoBase64 = await fileToBase64(photoFile);
-                        dbUser.photo = photoBase64;
+                        updates.photo = photoBase64;
                     }
-                    await dbPut(STORE_USERS, dbUser);
-                    saveSession(dbUser);
+                    await userRef.update(updates);
+                    saveSession({ ...dbUser, ...updates });
                     document.getElementById('editProfileModal').classList.remove('active');
                     location.reload();
                 }
@@ -992,20 +966,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             const user = getSession();
 
             try {
-                const dbUser = await dbGet(STORE_USERS, user.name);
-                if (dbUser.password !== hashPassword(currentPassword)) { alert('Current password is incorrect'); return; }
-                dbUser.password = hashPassword(newPassword);
-                await dbPut(STORE_USERS, dbUser);
-                saveSession(dbUser);
-                alert('Password changed successfully');
-                document.getElementById('changePasswordModal').classList.remove('active');
+                const userRef = db.collection('users').doc(user.name);
+                const docSnap = await userRef.get();
+                if (docSnap.exists) {
+                    const dbUser = docSnap.data();
+                    if (dbUser.password !== hashPassword(currentPassword)) { alert('Current password is incorrect'); return; }
+
+                    await userRef.update({ password: hashPassword(newPassword) });
+                    saveSession({ ...dbUser, password: hashPassword(newPassword) });
+                    alert('Password changed successfully');
+                    document.getElementById('changePasswordModal').classList.remove('active');
+                }
             } catch (err) { alert("Error changing password"); }
         });
 
     } catch (err) { console.error("Init", err); }
 });
 
-// Exports for global button access
 window.expandDay = expandDay;
 window.toggleEdit = toggleEdit;
 window.toggleProblemEdit = toggleProblemEdit;
