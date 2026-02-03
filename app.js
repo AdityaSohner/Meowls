@@ -488,7 +488,7 @@ async function handleSignup(e) {
 
 async function handleLogin(e) {
     e.preventDefault();
-    const name = toProperCase(document.getElementById('loginName').value.trim());
+    const name = toProperCase(document.getElementById('loginUsername').value.trim());
     const password = document.getElementById('loginPassword').value;
 
     try {
