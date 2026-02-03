@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meowls - Eco-Tech Innovation Program</title>
+    <meta name="description"
+        content="15-day intensive Summer School program focused on AI applications with eco-tech innovation">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal active">
+        <div class="modal-content login-card">
+            <div class="login-header">
+                <div class="circuit-pattern"></div>
+                <h2>Meowls</h2>
+                <p class="subtitle" data-translate="subtitle">Eco-Tech Innovation Program</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginUsername" data-translate="fullName">Full Name</label>
+                    <input type="text" id="loginUsername" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword" data-translate="password">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" data-translate="login">Login</button>
+                <p class="switch-auth"><span data-translate="noAccount">Don't have an account?</span> <a href="#"
+                        id="showSignup" data-translate="signUp">Sign Up</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signupModal" class="modal">
+        <div class="modal-content signup-card">
+            <div class="signup-header">
+                <div class="circuit-pattern"></div>
+                <h2 data-translate="joinMeowls">Join Meowls</h2>
+                <p class="subtitle" data-translate="createAccount">Create Your Account</p>
+            </div>
+            <form id="signupForm">
+                <div class="form-group">
+                    <label for="signupName" data-translate="fullName">Full Name *</label>
+                    <input type="text" id="signupName" placeholder="e.g., Aarav Singh" required>
+                    <small data-translate="usernameNote">This will be your username (cannot be changed later)</small>
+                </div>
+                <div class="form-group">
+                    <label for="signupPhoto" data-translate="photo">Profile Photo *</label>
+                    <input type="file" id="signupPhoto" accept="image/*" required>
+                    <div id="photoPreview" class="photo-preview"></div>
+                </div>
+                <div class="form-group">
+                    <label for="signupCountry" data-translate="country">Country *</label>
+                    <select id="signupCountry" required>
+                        <option value="">Select Country</option>
+                        <option value="India">India</option>
+                        <option value="Poland">Poland</option>
+                        <option value="Russia">Russia</option>
+                        <option value="Uzbekistan">Uzbekistan</option>
+                        <option value="Malaysia">Malaysia</option>
+                        <option value="China">China</option>
+                        <option value="Portugal">Portugal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="signupStream" data-translate="stream">Stream/Department *</label>
+                    <input type="text" id="signupStream" placeholder="e.g., Computer Science" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupBio" data-translate="bio">Bio *</label>
+                    <textarea id="signupBio" placeholder="Tell us a bit about yourself..." rows="3" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword" data-translate="password">Password *</label>
+                    <input type="password" id="signupPassword" placeholder="Create a password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" data-translate="signUp">Sign Up</button>
+                <p class="switch-auth"><span data-translate="hasAccount">Already have an account?</span> <a href="#"
+                        id="showLogin" data-translate="login">Login</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="hidden">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-content">
+                <div class="navbar-left">
+                    <div class="user-display-simple">
+                        <div class="user-avatar-simple">
+                            <img id="navUserPhoto" src="" alt="User">
+                        </div>
+                        <span id="navUsername">User</span>
+                    </div>
+                </div>
+                <div class="navbar-right">
+                    <a href="#about" class="nav-link" data-translate="about">About</a>
+                    <a href="#learnings" class="nav-link" data-translate="learnings">Learnings</a>
+                    <button class="hamburger-btn" id="hamburgerBtn">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hamburger Menu -->
+        <div class="hamburger-menu" id="hamburgerMenu">
+            <div class="menu-header">
+                <h3 data-translate="settings">Settings</h3>
+                <button class="close-menu" id="closeMenu">&times;</button>
+            </div>
+            <div class="menu-items">
+                <button class="menu-item" id="editProfileBtn">
+                    <img src="assets/icons/profile.svg" alt="Profile" class="menu-icon-img">
+                    <span data-translate="editUserInfo">Edit User Info</span>
+                </button>
+                <button class="menu-item" id="changePasswordBtn">
+                    <img src="assets/icons/password.svg" alt="Password" class="menu-icon-img">
+                    <span data-translate="changePassword">Change Password</span>
+                </button>
+                <div class="menu-item theme-toggle">
+                    <div class="theme-label-group">
+                        <img src="assets/icons/theme.svg" alt="Theme" class="menu-icon-img">
+                        <span data-translate="darkMode">Dark Mode</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="themeToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="menu-item language-settings">
+                    <div class="theme-label-group">
+                        <!-- Placeholder for icon if needed, using text for now or reuse theme icon -->
+                        <span>Language</span>
+                    </div>
+                    <select id="languageSelect" class="lang-dropdown">
+                        <option value="English">English</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Polish">Polish</option>
+                        <option value="Russian">Russian</option>
+                        <option value="Uzbek">Uzbek</option>
+                        <option value="Malay">Malay</option>
+                        <option value="Chinese">Chinese</option>
+                        <option value="Portuguese">Portuguese</option>
+                    </select>
+                </div>
+                <button class="menu-item logout" id="logoutBtn">
+                    <img src="assets/icons/logout.svg" alt="Logout" class="menu-icon-img">
+                    <span data-translate="logout">Logout</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- About Section -->
+        <section id="about" class="section about-section">
+            <div class="container">
+                <div class="about-container-horizontal">
+                    <div class="about-logo-wrapper">
+                        <img src="assets/logo.jpg" alt="Meowls Logo" class="meowl-main-logo">
+                    </div>
+                    <div class="about-text-wrapper">
+                        <h2 data-translate="aboutMeowls">About Meowls</h2>
+                        <!-- Static content that could be translated if we had the text, keeping as is for now or targeting if keys exist -->
+                        <p data-translate="welcomeText">Welcome to Meowls, our intensive 15-day Summer School program
+                            focused on AI Applications with an eco-tech perspective. This program brings together
+                            passionate learners from around the world to explore cutting-edge artificial intelligence
+                            technologies while maintaining a sustainable, environmentally-conscious approach.</p>
+                        <p data-translate="projectText">Through hands-on projects, collaborative learning, and expert
+                            mentorship, participants will develop practical AI skills that address real-world
+                            environmental and technological challenges.</p>
+                    </div>
+                </div>
+
+                <div class="team-section">
+                    <h2 data-translate="meetTeam">Meet the Team</h2>
+                    <div class="team-grid" id="teamGrid">
+                        <!-- Team content will be dynamically generated -->
+                    </div>
+                </div>
+
+                <div class="problem-statement-section" id="problemStatementSection">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2 style="margin-bottom: 0;" data-translate="problemStatement">Problem Statement</h2>
+                        <img id="editProblemBtn" src="assets/icons/edit_logo.png" alt="Edit" class="edit-icon-btn"
+                            onclick="toggleProblemEdit()"
+                            style="cursor: pointer; width: 32px; height: 32px; object-fit: contain;">
+                    </div>
+                    <div id="problemTextContainer" class="problem-text">
+                        <!-- Loaded from JS -->
+                    </div>
+                    <textarea id="problemTextarea" class="problem-textarea hidden"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <!-- Learnings Section -->
+        <section id="learnings" class="section learnings-section">
+            <div class="container">
+                <h2 class="section-title" data-translate="timeline">Timeline</h2>
+                <div class="timeline" id="timeline">
+                    <!-- Timeline will be dynamically generated -->
+                </div>
+            </div>
+        </section>
+
+        <footer class="main-footer">
+            <div class="container" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                <p class="footer-text" id="footerText1" data-translate="thankYou">Thank you.</p>
+                <p class="footer-subtext" id="footerText2" data-translate="teamMeowls">~ Team Meowls</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Day Expanded Modal -->
+    <div id="dayExpandedModal" class="modal">
+        <div class="modal-content day-expanded-content">
+            <div class="modal-header">
+                <h2 id="expandedDayTitle">Day X</h2>
+                <!-- Close Button Logic -->
+                <button class="close-btn" id="closeDayExpanded" type="button" aria-label="Close">&times;</button>
+            </div>
+            <div class="expanded-learnings" id="expandedLearnings">
+                <!-- Learning cards will be dynamically generated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content change-password-card">
+            <div class="modal-header">
+                <h2 data-translate="changePassword">Change Password</h2>
+                <button class="close-btn" id="closeChangePassword">&times;</button>
+            </div>
+            <form id="changePasswordForm">
+                <div class="form-group">
+                    <label for="currentPassword" data-translate="currentPassword">Current Password</label>
+                    <input type="password" id="currentPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword" data-translate="newPassword">New Password</label>
+                    <input type="password" id="newPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword" data-translate="confirmPassword">Confirm New Password</label>
+                    <input type="password" id="confirmPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary" data-translate="updatePassword">Update Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="editProfileModal" class="modal">
+        <div class="modal-content edit-profile-card">
+            <div class="modal-header">
+                <h2 data-translate="editUserInfo">Edit User Info</h2>
+                <button class="close-btn" id="closeEditProfile">&times;</button>
+            </div>
+            <form id="editProfileForm">
+                <div class="form-group">
+                    <label data-translate="fullName">Full Name (Cannot be changed)</label>
+                    <input type="text" id="editName" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="editPhoto" data-translate="photo">Profile Photo</label>
+                    <input type="file" id="editPhoto" accept="image/*">
+                    <div id="editPhotoPreview" class="photo-preview"></div>
+                </div>
+                <div class="form-group">
+                    <label for="editCountry" data-translate="country">Country</label>
+                    <select id="editCountry" required>
+                        <option value="India">India</option>
+                        <option value="Poland">Poland</option>
+                        <option value="Russia">Russia</option>
+                        <option value="Uzbekistan">Uzbekistan</option>
+                        <option value="Malaysia">Malaysia</option>
+                        <option value="China">China</option>
+                        <option value="Portugal">Portugal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editStream" data-translate="stream">Stream/Department</label>
+                    <input type="text" id="editStream" required>
+                </div>
+                <div class="form-group">
+                    <label for="editBio" data-translate="bio">Bio</label>
+                    <textarea id="editBio" rows="3" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" data-translate="saveChanges">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
