@@ -445,6 +445,12 @@ async function handleSignup(e) {
 
     if (!name || !password || !country || !stream || !photoFile) { alert('Please fill in all fields'); return; }
 
+    // Check File Size (Max 500KB) to prevent LocalStorage Quota Exceeded
+    if (photoFile.size > 500 * 1024) {
+        alert('Photo is too large! Please choose an image smaller than 500KB.');
+        return;
+    }
+
     const users = getUsers();
     if (users.length >= MAX_USERS) { alert('Registration full (Max 5 users)'); return; }
     if (users.some(u => u.name === name)) { alert('Username already taken'); return; }
@@ -460,12 +466,23 @@ async function handleSignup(e) {
             bio: ''
         };
         users.push(newUser);
-        saveUsers(users);
+
+        try {
+            saveUsers(users); // Try to save to disk
+        } catch (storageErr) {
+            console.error(storageErr);
+            alert('Storage Full! The photo could not be saved. Please use a smaller photo or clear users.');
+            return; // Stop here, do not log them in if save failed
+        }
+
         saveSession(newUser);
         document.getElementById('signupForm').reset();
         document.getElementById('photoPreview').innerHTML = '';
         showApp();
-    } catch (err) { alert('Error processing photo'); }
+    } catch (err) {
+        console.error(err);
+        alert('Error processing signup. Please try again.');
+    }
 }
 
 function handleLogin(e) {
@@ -500,15 +517,16 @@ function showApp() {
         if (document.getElementById('navUsername')) document.getElementById('navUsername').textContent = user.name;
         if (document.getElementById('navUserPhoto')) document.getElementById('navUserPhoto').src = user.photo;
 
-        // Language Logic
         let lang = localStorage.getItem(STORAGE_KEYS.LANG_PREF);
         if (!lang) {
             lang = COUNTRY_TO_LANG[user.country] || 'English';
         }
+
         const langSelect = document.getElementById('languageSelect');
         if (langSelect) {
             langSelect.value = lang;
         }
+
         applyTranslations(lang);
     }
 
